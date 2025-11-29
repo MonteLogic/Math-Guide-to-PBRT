@@ -1,0 +1,22 @@
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {section}{\numberline {2}Coordinate Systems}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Handedness: Left vs. Right}{2}{subsection.2.1}%
+\contentsline {section}{\numberline {3}The Actors: Vectors, Points, and Normals}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Vectors (\texttt {Vector3f})}{2}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Points (\texttt {Point3f})}{3}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Normals (\texttt {Normal3f})}{3}{subsection.3.3}%
+\contentsline {section}{\numberline {4}The Toolset: Dot and Cross Products}{3}{section.4}%
+\contentsline {subsection}{\numberline {4.1}The Dot Product}{3}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}The Cross Product}{4}{subsection.4.2}%
+\contentsline {section}{\numberline {5}Rays (\texttt {Ray})}{4}{section.5}%
+\contentsline {subsection}{\numberline {5.1}The Ray Equation}{4}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Implementation Detail: \texttt {tMax}}{4}{subsection.5.2}%
+\contentsline {section}{\numberline {6}Bounding Boxes (\texttt {Bounds3f})}{4}{section.6}%
+\contentsline {section}{\numberline {7}Transformations}{4}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Homogeneous Coordinates}{5}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}The Transformation Matrix}{5}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}The \texttt {Transform} Class}{5}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Spherical Geometry}{5}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Solid Angle}{5}{subsection.8.1}%
+\contentsline {section}{\numberline {9}Interactions (\texttt {Interaction})}{5}{section.9}%
+\contentsline {section}{\numberline {10}Summary for the Programmer}{6}{section.10}%
