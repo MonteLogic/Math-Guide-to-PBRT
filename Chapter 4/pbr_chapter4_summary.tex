@@ -1,0 +1,208 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+
+% --- Page Formatting ---
+\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+% --- Code Snippet Styling ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    language=C++
+}
+
+\lstset{style=mystyle}
+
+% --- Title ---
+\title{\textbf{Physically Based Rendering (4th Ed): Chapter 4 Summary}\\
+\large \textit{Radiometry, Spectra, and Color: The Physics of Light}}
+\author{Gemini (For a Developer Audience)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Introduction: Light is Just Data}
+
+In Chapter 2, we learned that rendering is just ``averaging random samples.'' But what exactly are we sampling? We are sampling \textbf{Light}.
+
+Chapter 4 is about \textbf{Radiometry}, which is the system of units we use to measure light. If you are a programmer, think of this as defining your \textbf{Data Types}. You wouldn't mix up an `int` and a `string`. Similarly, you shouldn't mix up ``Flux'' and ``Radiance.''
+
+This chapter answers: ``What number do I put in my `Spectrum` class?''
+
+% -------------------------------------------------------------------
+
+\section{Radiometry: The Data Types}
+
+There are four main units you need to know. They all measure ``light,'' but in different contexts.
+
+\subsection{1. Radiant Energy ($Q$)}
+\textbf{Unit}: Joules ($J$)
+
+This is raw energy. It's the total amount of energy a photon carries.
+\begin{itemize}
+    \item \textbf{Code Analogy}: A battery's total capacity.
+    \item \textbf{Usage}: Rarely used directly in rendering because we care about light \textit{over time} (frames per second), not total energy over a century.
+\end{itemize}
+
+\subsection{2. Radiant Flux ($\Phi$)}
+\textbf{Unit}: Watts ($W$) or Joules/second
+
+This is energy flowing through space \textbf{per second}.
+\begin{itemize}
+    \item \textbf{Code Analogy}: Bandwidth (Megabytes per second).
+    \item \textbf{Usage}: The total power of a light source. A ``100 Watt lightbulb'' is emitting 100 Joules of energy every second.
+    \item \textbf{Math}: $\Phi = \frac{dQ}{dt}$ (Change in energy over change in time).
+\end{itemize}
+
+\subsection{3. Irradiance ($E$)}
+\textbf{Unit}: Watts per square meter ($W/m^2$)
+
+This is Flux arriving at a \textbf{Surface}.
+\begin{itemize}
+    \item \textbf{Code Analogy}: Rain falling on the ground.
+    \item \textbf{Usage}: How much light is hitting this specific polygon?
+    \item \textbf{Math}: $E = \frac{d\Phi}{dA}$ (Flux per unit Area).
+\end{itemize}
+If you have a 100W lightbulb ($\Phi$) and you spread its light over a huge wall ($A$), the Irradiance ($E$) is low. The wall is dim. If you focus it on a tiny dot, $E$ is huge. The dot burns.
+
+\subsection{4. Radiance ($L$)}
+\textbf{Unit}: Watts per steradian per square meter ($W/(sr \cdot m^2)$)
+
+This is the big one. \textbf{Radiance is what you see.}
+\begin{itemize}
+    \item \textbf{Code Analogy}: A pixel on your monitor.
+    \item \textbf{Usage}: Light traveling along a \textbf{specific ray}.
+    \item \textbf{Math}: $L = \frac{d^2\Phi}{d\omega \, dA^\perp}$
+\end{itemize}
+
+\begin{tcolorbox}[title=Why is Radiance Special?, colback=blue!5!white, colframe=blue!75!black]
+Radiance has a magical property: \textbf{It is constant along a ray.}
+
+If you look at a wall from 1 meter away, or 100 meters away, the brightness (Radiance) of the point you are looking at is the same.
+\begin{itemize}
+    \item \textbf{Flux} falls off with distance ($1/r^2$).
+    \item \textbf{Irradiance} falls off with distance.
+    \item \textbf{Radiance} stays constant.
+\end{itemize}
+This is why Ray Tracing works. We trace a ray from the camera to the wall. We calculate the Radiance leaving the wall. We assign that value directly to the pixel. We don't need to worry about how far away the camera is.
+\end{tcolorbox}
+
+% -------------------------------------------------------------------
+
+\section{Working with Integrals}
+
+You will see this scary equation everywhere in PBRT:
+
+\begin{equation}
+    L_o(p, \omega_o) = \int_{\Omega} f(p, \omega_o, \omega_i) L_i(p, \omega_i) |\cos \theta_i| d\omega_i
+\end{equation}
+
+Don't panic. Let's parse it like a function definition.
+
+\begin{itemize}
+    \item $L_o(p, \omega_o)$: \textbf{Output}. Light leaving point $p$ in direction $\omega_o$ (towards camera).
+    \item $\int_{\Omega}$: \textbf{For Loop}. Loop over every possible incoming direction (the hemisphere $\Omega$).
+    \item $L_i(p, \omega_i)$: \textbf{Input}. Light arriving at point $p$ from direction $\omega_i$.
+    \item $f(p, \omega_o, \omega_i)$: \textbf{Material}. The BRDF (Bidirectional Reflectance Distribution Function). It says ``If light comes from $\omega_i$, how much reflects to $\omega_o$?''
+    \item $|\cos \theta_i|$: \textbf{Geometry Factor}. Light hitting a surface at a steep angle spreads out more (Lambert's Law).
+\end{itemize}
+
+\textbf{The Programmer's Translation:}
+\begin{lstlisting}
+Color Lo = Color(0,0,0); // Accumulator
+
+// "Integrate over hemisphere" -> Sample many directions
+for (Vector3 wi : SampleHemisphere()) {
+    Color Li = TraceRay(p, wi); // Incoming light
+    Color f  = Material.Eval(wo, wi); // BRDF
+    float cosTheta = Dot(Normal, wi); // Geometry factor
+    
+    Lo += f * Li * cosTheta;
+}
+return Lo / NumSamples;
+\end{lstlisting}
+
+% -------------------------------------------------------------------
+
+\section{Color and Spectra}
+
+In standard web development, color is `RGB(255, 0, 0)`. In physics, color is a continuous function of wavelength.
+
+\subsection{Spectral Power Distribution (SPD)}
+Light is a wave. An SPD is a graph showing how much energy exists at each wavelength ($\lambda$).
+\begin{itemize}
+    \item \textbf{Laser}: A spike at one specific wavelength (e.g., 650nm).
+    \item \textbf{Sunlight}: A smooth curve across all visible wavelengths.
+\end{itemize}
+
+\subsection{XYZ and RGB}
+We cannot simulate infinite wavelengths. We need to compress this data.
+Humans have 3 types of cones in our eyes. This means we can compress the infinite SPD into just 3 numbers.
+
+\textbf{XYZ Color Space}: The standard ``human vision'' coordinate system.
+\textbf{RGB Color Space}: A device-dependent system (your monitor).
+
+\textbf{The Conversion Pipeline:}
+\begin{enumerate}
+    \item \textbf{Simulation}: PBRT v4 does everything using \textbf{Spectra} (sampled at specific wavelengths), not RGB. This is more accurate for dispersion (prisms) and complex materials.
+    \item \textbf{Film}: At the very end, the spectral samples are converted to \textbf{XYZ}.
+    \item \textbf{Display}: XYZ is converted to \textbf{sRGB} (or Rec2020) to be displayed on your screen.
+\end{enumerate}
+
+\begin{tcolorbox}[title=Why not just use RGB?, colback=red!5!white, colframe=red!75!black]
+Multiplying RGB values is mathematically wrong for physics.
+\begin{itemize}
+    \item Real physics: Multiply the SPD curves.
+    \item RGB hack: Multiply R*R, G*G, B*B.
+\end{itemize}
+For simple matte paints, RGB is ``close enough.'' For complex phenomena like skin, water, or iridescent beetles, RGB fails. PBRT v4 uses full spectral rendering to fix this.
+\end{tcolorbox}
+
+% -------------------------------------------------------------------
+
+\section*{Summary for the Developer}
+\begin{enumerate}
+    \item \textbf{Know your Units}:
+    \begin{itemize}
+        \item Flux ($\Phi$) = Power (Lightbulb wattage).
+        \item Irradiance ($E$) = Light arriving at surface.
+        \item Radiance ($L$) = Light traveling along a ray (Pixel color).
+    \end{itemize}
+    \item \textbf{The Integral is a Loop}: The ``Rendering Equation'' is just a loop summing up light * material * cosine.
+    \item \textbf{Spectra > RGB}: Real light is a wave. RGB is just a compression format for human eyes. PBRT simulates the waves (Spectra) and only converts to RGB at the very end.
+\end{enumerate}
+
+\end{document}

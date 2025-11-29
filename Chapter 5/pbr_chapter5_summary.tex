@@ -1,0 +1,197 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+
+% --- Page Formatting ---
+\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+% --- Code Snippet Styling ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    language=C++
+}
+
+\lstset{style=mystyle}
+
+% --- Title ---
+\title{\textbf{Physically Based Rendering (4th Ed): Chapter 5 Summary}\\
+\large \textit{Cameras and Film: Projective Geometry for Programmers}}
+\author{Gemini (For a Developer Audience)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Introduction: The Reverse Process}
+
+In the real world, cameras capture light. In a ray tracer, cameras \textbf{generate} rays.
+
+Chapter 5 is about the math of converting a 2D pixel coordinate $(x, y)$ on your screen into a 3D ray $(Origin, Direction)$ in the world. This is the starting point of every single path in your renderer.
+
+If you know linear algebra (matrices), this chapter is straightforward. If not, we will simplify it to ``Coordinate Spaces.''
+
+% -------------------------------------------------------------------
+
+\section{Coordinate Systems}
+
+Rendering is just moving data between different coordinate systems. You need to know these four spaces by heart:
+
+\begin{enumerate}
+    \item \textbf{Object Space}: The local coordinates of a 3D model (e.g., a sphere is centered at 0,0,0).
+    \item \textbf{World Space}: The global scene where all objects live.
+    \item \textbf{Camera Space}: The world seen from the camera's point of view. The camera is at $(0,0,0)$, looking down the $+Z$ axis (in PBRT's convention).
+    \item \textbf{Screen Space (Raster)}: The 2D coordinates of the pixels on your image (e.g., pixel 100, 200).
+\end{enumerate}
+
+\textbf{The Pipeline:}
+To generate a ray, we go backwards:
+\[ \text{Raster} \rightarrow \text{Camera} \rightarrow \text{World} \]
+
+% -------------------------------------------------------------------
+
+\section{The Projective Camera Models}
+
+\subsection{1. The Pinhole Camera (Perspective)}
+This is the standard camera. Objects get smaller as they get further away.
+
+\textbf{The Math (Simplified):}
+Imagine the film (your screen) is placed 1 meter in front of the camera.
+If you want to generate a ray for a pixel at $(x, y)$ on the film:
+\begin{itemize}
+    \item \textbf{Origin}: $(0, 0, 0)$ (The camera position).
+    \item \textbf{Target}: $(x, y, 1)$ (The point on the film).
+    \item \textbf{Direction}: Normalize(Target - Origin).
+\end{itemize}
+
+\textbf{Field of View (FOV):}
+The FOV determines how ``wide'' the film is. A wider film captures more of the scene.
+\begin{equation}
+    \tan(\frac{FOV}{2}) = \text{Screen Window Size}
+\end{equation}
+
+\subsection{2. The Orthographic Camera}
+This is used for architectural diagrams or 2D games. Parallel lines remain parallel. Objects do not get smaller with distance.
+
+\textbf{The Math:}
+\begin{itemize}
+    \item \textbf{Origin}: $(x, y, 0)$ (The ray starts at the pixel's location).
+    \item \textbf{Direction}: $(0, 0, 1)$ (Straight forward).
+\end{itemize}
+Notice the difference? Perspective rays start at a point and spread out. Orthographic rays start spread out and go parallel.
+
+% -------------------------------------------------------------------
+
+\section{Depth of Field (The Thin Lens Model)}
+
+Real cameras are not pinholes. They have lenses. This causes \textbf{Depth of Field} (blur).
+\begin{itemize}
+    \item Objects at the \textbf{Focal Distance} are sharp.
+    \item Objects closer or further are blurry.
+\end{itemize}
+
+\textbf{How to Simulate Blur?}
+In a pinhole camera, every ray for a pixel starts at the exact same point $(0,0,0)$.
+In a lens camera, the ray can start anywhere on the \textbf{Lens Disk}.
+
+\textbf{The Algorithm:}
+\begin{enumerate}
+    \item Calculate the point where the perfect pinhole ray hits the \textbf{Plane of Focus}. Let's call this $P_{focus}$.
+    \item Pick a random point on the lens, $P_{lens}$. (Remember Chapter 2: Sampling a Disk!).
+    \item The new ray starts at $P_{lens}$ and goes towards $P_{focus}$.
+\end{enumerate}
+
+\begin{lstlisting}
+// 1. Standard Pinhole Ray
+Ray ray = GeneratePinholeRay(pixel);
+Point3 pFocus = ray.at(focalDistance);
+
+// 2. Sample Lens (Aperture)
+Point2 lensSample = SampleConcentricDisk(random1, random2) * lensRadius;
+Point3 pLens = Point3(lensSample.x, lensSample.y, 0);
+
+// 3. New Ray
+ray.Origin = pLens;
+ray.Direction = Normalize(pFocus - pLens);
+\end{lstlisting}
+
+This is a perfect example of Monte Carlo.
+\begin{itemize}
+    \item If you take 1 sample, the image looks wrong (noisy/random).
+    \item If you take 100 samples and average them, the intersection of all those rays at $P_{focus}$ remains sharp. The intersection of rays elsewhere spreads out $\rightarrow$ \textbf{Blur}.
+\end{itemize}
+
+% -------------------------------------------------------------------
+
+\section{Transformations and Matrices}
+
+You don't need to perform matrix multiplication by hand, but you must understand what the matrices \textit{do}.
+
+\subsection{The LookAt Matrix}
+This is the most common helper function. You provide:
+\begin{itemize}
+    \item \textbf{Eye}: Where the camera is.
+    \item \textbf{Look}: What it's looking at.
+    \item \textbf{Up}: Which way is ``up'' (usually Y-axis).
+\end{itemize}
+It returns a $4\times4$ matrix that transforms World Space $\rightarrow$ Camera Space.
+
+\subsection{Ray-Object Intersection}
+Here is a pro-tip from the book.
+Intersecting a ray with a generic transformed object (e.g., a rotated, scaled ellipsoid) is hard.
+Intersecting a ray with a unit sphere (radius 1 at origin) is easy.
+
+\textbf{The Trick:}
+Instead of transforming the \textit{Object} to World Space, we transform the \textit{Ray} to Object Space.
+\begin{enumerate}
+    \item Apply the \textbf{Inverse} transformation to the Ray.
+    \item Intersect Ray with Unit Sphere.
+    \item The hit time $t$ is the same in both spaces.
+\end{enumerate}
+
+\begin{equation}
+    \text{WorldRay} = M \times \text{ObjectRay} \quad \rightarrow \quad \text{ObjectRay} = M^{-1} \times \text{WorldRay}
+\end{equation}
+
+% -------------------------------------------------------------------
+
+\section*{Summary for the Developer}
+\begin{enumerate}
+    \item \textbf{Coordinate Spaces}: Know where your data is. Are you in World Space? Camera Space? Screen Space?
+    \item \textbf{Camera = Ray Generator}: The `Camera` class has one main method: `GenerateRay(pixel)`.
+    \item \textbf{Depth of Field}: It's just jittering the ray origin on a disk.
+    \item \textbf{Transform the Ray, Not the Object}: It's mathematically easier to move the ray into the object's local coordinate system than to solve math for arbitrary rotated shapes.
+\end{enumerate}
+
+\end{document}

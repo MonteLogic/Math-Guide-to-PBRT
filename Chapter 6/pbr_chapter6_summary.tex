@@ -1,0 +1,167 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+
+% --- Page Formatting ---
+\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+% --- Code Snippet Styling ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    language=C++
+}
+
+\lstset{style=mystyle}
+
+% --- Title ---
+\title{\textbf{Physically Based Rendering (4th Ed): Chapter 6 Summary}\\
+\large \textit{Shapes: Intersection and Differential Geometry}}
+\author{Gemini (For a Developer Audience)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Introduction: Hitting Things}
+
+Chapter 6 is the ``Collision Detection'' chapter.
+We have a Ray: $R(t) = O + t\mathbf{d}$.
+We have a Shape (Sphere, Triangle, Cylinder).
+We need to find $t$ such that the ray touches the shape.
+
+But PBRT goes deeper. It's not enough to just hit the shape. We need to know \textit{everything} about the surface at that hit point: the normal, the UV coordinates, the tangent vectors, etc. This is called \textbf{Differential Geometry}.
+
+% -------------------------------------------------------------------
+
+\section{The Basic Intersection Equation}
+
+\subsection{The Sphere}
+A sphere at the origin with radius $r$ is defined by:
+\[ x^2 + y^2 + z^2 - r^2 = 0 \]
+
+Substitute the Ray equation ($x = O_x + t d_x$, etc.) into the Sphere equation:
+\[ (O_x + t d_x)^2 + (O_y + t d_y)^2 + (O_z + t d_z)^2 - r^2 = 0 \]
+
+This expands into a standard Quadratic Equation:
+\begin{equation}
+    A t^2 + B t + C = 0
+\end{equation}
+Where:
+\begin{itemize}
+    \item $A = \mathbf{d} \cdot \mathbf{d}$ (Length of direction vector squared, usually 1).
+    \item $B = 2 (\mathbf{O} \cdot \mathbf{d})$.
+    \item $C = \mathbf{O} \cdot \mathbf{O} - r^2$.
+\end{itemize}
+
+\textbf{The Solution:}
+Use the Quadratic Formula: $t = \frac{-B \pm \sqrt{B^2 - 4AC}}{2A}$.
+\begin{itemize}
+    \item If $B^2 - 4AC < 0$: No intersection (Ray misses).
+    \item If $B^2 - 4AC > 0$: Two intersections (Entry and Exit). Take the smallest positive $t$.
+\end{itemize}
+
+\subsection{The Triangle}
+Triangles are the most common shape. PBRT uses the \textbf{Möller-Trumbore algorithm}.
+It uses Barycentric Coordinates. Any point $P$ inside a triangle $(A, B, C)$ can be written as:
+\[ P = (1 - u - v)A + uB + vC \]
+We equate the Ray to the Triangle:
+\[ O + t\mathbf{d} = (1 - u - v)A + uB + vC \]
+This gives us a system of linear equations to solve for $t$, $u$, and $v$. If $u \ge 0$, $v \ge 0$, and $u+v \le 1$, the hit is valid.
+
+% -------------------------------------------------------------------
+
+\section{Differential Geometry: Knowing the Surface}
+
+Once we hit a surface, we populate a `SurfaceInteraction` object. This is crucial for shading.
+
+\subsection{1. The Normal ($\mathbf{n}$)}
+The vector perpendicular to the surface.
+\begin{itemize}
+    \item \textbf{Sphere}: The normal at point $P$ is simply Normalize($P - Center$).
+    \item \textbf{Triangle}: The cross product of two edges. $(B-A) \times (C-A)$.
+\end{itemize}
+The normal tells us which way the surface is facing, which determines how light reflects.
+
+\subsection{2. Parametric Coordinates ($u, v$)}
+Every surface in PBRT is parameterized by $(u, v)$ coordinates.
+\begin{itemize}
+    \item Used for \textbf{Texture Mapping}.
+    \item On a sphere, $u$ maps to longitude ($\phi$) and $v$ maps to latitude ($\theta$).
+\end{itemize}
+
+\subsection{3. Partial Derivatives ($\frac{\partial P}{\partial u}, \frac{\partial P}{\partial v}$)}
+This is the calculus part.
+\begin{itemize}
+    \item $\frac{\partial P}{\partial u}$: If I move slightly in the $u$ direction on the texture, which way does the point $P$ move in 3D space?
+    \item $\frac{\partial P}{\partial v}$: Same for $v$.
+\end{itemize}
+These two vectors are \textbf{Tangent} to the surface.
+The Cross Product of these tangents gives us the Normal:
+\[ \mathbf{n} = \text{Normalize}\left( \frac{\partial P}{\partial u} \times \frac{\partial P}{\partial v} \right) \]
+
+\begin{tcolorbox}[title=Why do we need Derivatives?, colback=green!5!white, colframe=green!75!black]
+Why not just store the Normal?
+Because of \textbf{Bump Mapping} and \textbf{Anisotropy}.
+
+If you want to simulate brushed metal (Anisotropy), the reflection depends on the direction of the scratches. The derivatives $\frac{\partial P}{\partial u}$ tell us exactly which way the ``scratches'' (texture coordinates) flow across the 3D surface.
+\end{tcolorbox}
+
+% -------------------------------------------------------------------
+
+\section{Managing Rounding Error}
+
+Computers use floating-point numbers (floats). Floats are not real numbers; they have gaps.
+When a ray hits a surface at $t$, the calculated point $P = O + t\mathbf{d}$ might be slightly \textit{below} the surface due to rounding error.
+
+\textbf{Self-Intersection (Shadow Acne):}
+If you spawn a new shadow ray from $P$, it might immediately hit the surface itself because $P$ is technically ``inside'' the object. The surface shadows itself, creating ugly black speckles.
+
+\textbf{The Solution: Robust Spawn}
+PBRT uses a robust method to spawn rays.
+Instead of starting exactly at $P$, it offsets the origin slightly along the Normal $\mathbf{n}$.
+\[ O_{new} = P + \epsilon \mathbf{n} \]
+PBRT calculates this $\epsilon$ (epsilon) dynamically based on the magnitude of the coordinates, ensuring the ray definitely clears the surface boundary.
+
+% -------------------------------------------------------------------
+
+\section*{Summary for the Developer}
+\begin{enumerate}
+    \item \textbf{Ray-Shape Intersection}: It's just algebra. Sphere = Quadratic Formula. Triangle = Linear System.
+    \item \textbf{SurfaceInteraction}: The result of an intersection isn't just a point. It's a data structure containing Position, Normal, UVs, and Tangents (Derivatives).
+    \item \textbf{Tangents matter}: You need partial derivatives ($\partial P / \partial u$) to do advanced shading like bump mapping or brushed metal.
+    \item \textbf{Float Precision}: Never trust `float`. Always offset your rays slightly to avoid self-intersection artifacts.
+\end{enumerate}
+
+\end{document}
