@@ -1,0 +1,312 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+
+% --- Page Formatting ---
+\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+% --- Code Snippet Styling ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    language=C++
+}
+
+\lstset{style=mystyle}
+
+% --- Title ---
+\title{\textbf{Physically Based Rendering (4th Ed): Chapter 2 Summary}\\
+\large \textit{A Programmer's Guide to Monte Carlo Integration}}
+\author{Gemini (For a Developer Audience)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Introduction: Why Are We Here?}
+
+You have a strong programming background, so let's frame this entire chapter not as ``calculus,'' but as \textbf{data sampling}.
+
+In computer graphics, we are trying to calculate the color of a pixel. That color is the result of billions of photons bouncing around a room and hitting a camera sensor. To solve this ``physically,'' we need to sum up all the light arriving at that pixel from every possible direction.
+
+In calculus, ``summing up an infinite number of things'' is an \textbf{Integral}.
+\begin{equation}
+    L = \int f(x) \, dx
+\end{equation}
+The problem? This integral is impossible to solve analytically. The scene geometry is too complex; you cannot write a clean formula for ``a dragon mesh blocking a point light.''
+
+\textbf{Chapter 2} introduces the solution: \textbf{Monte Carlo Integration}.
+
+If you cannot solve the equation, you \textbf{simulate} it. Instead of calculating the exact area under a curve, you throw thousands of random points at it and average the result. This chapter explains the math (and code) required to do this correctly.
+
+% -------------------------------------------------------------------
+
+\section{Monte Carlo: The Basics}
+
+This section bridges the gap between probability theory and code.
+
+\subsection{The Random Variable}
+In your code, you likely use \texttt{Math.random()} (or \texttt{drand48()}), which returns a floating-point number between 0 and 1. This is a \textbf{Uniform Random Variable}, often denoted as $\xi$ (xi) in the book.
+\begin{itemize}
+    \item \textbf{Uniform}: Every number between 0 and 1 has an equal chance of appearing.
+    \item \textbf{Canonical}: This is the raw material we use to build more complex variables.
+\end{itemize}
+
+\subsection{The Expected Value}
+The ``Expected Value'' $E[x]$ is just the fancy math term for the \textbf{average}.
+If you roll a die 1,000,000 times, the average roll will be 3.5.
+\begin{equation}
+    E[x] = \sum x_i \cdot p_i
+\end{equation}
+In programming terms:
+\begin{lstlisting}
+double sum = 0;
+for(int i = 0; i < N; i++) {
+    sum += rollDie();
+}
+double expectedValue = sum / N;
+\end{lstlisting}
+
+\subsection{The Monte Carlo Estimator}
+This is the core formula of the entire rendering engine. The book presents it as:
+\begin{equation}
+    F_N = \frac{1}{N} \sum_{i=1}^{N} \frac{f(X_i)}{p(X_i)}
+\end{equation}
+
+Let's translate this into a programmer's loop. We want to find the total brightness (Integral) of a point.
+\begin{itemize}
+    \item $N$: The number of samples (rays you shoot).
+    \item $f(X_i)$: The brightness of the light found by ray $i$.
+    \item $p(X_i)$: The probability that you chose to shoot ray $i$ in that direction.
+\end{itemize}
+
+\textbf{The Code Implementation:}
+\begin{lstlisting}
+double totalLight = 0.0;
+int N = 100; // Number of samples
+
+for (int i = 0; i < N; i++) {
+    // 1. Pick a random direction (X_i)
+    Vector3 direction = GetRandomDirection();
+    
+    // 2. Determine the probability of picking that direction
+    double probability = GetProbabilityOfDirection(direction);
+    
+    // 3. Trace ray and get light f(X_i)
+    double lightIntensity = TraceRay(direction);
+    
+    // 4. Accumulate (The Estimator Formula)
+    // We divide by probability to weight the sample correctly
+    totalLight += lightIntensity / probability;
+}
+
+// 5. Average result
+double finalPixelColor = totalLight / N;
+\end{lstlisting}
+
+\begin{tcolorbox}[title=Why divide by probability $p(X_i)$?, colback=blue!5!white, colframe=blue!75!black]
+Imagine you are trying to find the average height of people in a room, but you only pick people from the basketball team to measure. Your result will be too high (biased).
+
+To correct this, you must \textbf{weight} your samples. If you know you are over-sampling tall people (high probability), you divide their contribution by that high probability to ``normalize'' the result.
+\begin{itemize}
+    \item Rare events (low $p$) get a huge weight (divide by small number).
+    \item Common events (high $p$) get a small weight.
+\end{itemize}
+This ensures the math works out to the correct ``Unbiased'' average.
+\end{tcolorbox}
+
+\subsection{Variance (The Noise)}
+In your render, ``Variance'' looks like static or grain.
+\begin{itemize}
+    \item \textbf{Low Variance}: Smooth image.
+    \item \textbf{High Variance}: Noisy, speckled image.
+\end{itemize}
+
+The error in Monte Carlo integration decreases at a rate of $\sqrt{N}$.
+\begin{itemize}
+    \item To cut the noise in half, you need \textbf{4x} the samples.
+    \item To cut the noise to 1/10th, you need \textbf{100x} the samples.
+\end{itemize}
+This is why rendering takes so long. The ``Optimization'' game in rendering is entirely about finding ways to lower variance without just increasing $N$.
+
+% -------------------------------------------------------------------
+
+\section{Improving Efficiency}
+
+Since we can't just set $N$ to infinity, we need smarter ways to sample.
+
+\subsection{Stratified Sampling (Jittering)}
+\textbf{The Problem}: \texttt{Math.random()} is ``clumpy.'' If you pick 100 random pixels, you might get 5 pixels right next to each other and leave a huge gap elsewhere.
+
+\textbf{The Solution}: Stratified Sampling. Divide your domain into a grid. Pick \textbf{one} random sample inside \textbf{each} grid cell.
+
+\textbf{Code Analogy}:
+Instead of:
+\begin{lstlisting}
+float u = RandomFloat(); // 0.0 to 1.0
+\end{lstlisting}
+Do this (for 4 samples):
+\begin{lstlisting}
+// Sample 1: Random in 0.00-0.25
+// Sample 2: Random in 0.25-0.50
+// Sample 3: Random in 0.50-0.75
+// ...
+\end{lstlisting}
+This reduces variance because you are guaranteed to ``look'' at every part of the image/light function.
+
+\subsection{Importance Sampling}
+This is the most critical concept in modern rendering.
+
+\textbf{Analogy}: If you are trying to calculate the average brightness of a night sky, and you shoot rays randomly, 99\% of them will hit the black sky (0 light). You waste computation. It is smarter to shoot rays \textbf{only at the moon} (where the light is).
+
+\textbf{Mathematically}: Make $p(x)$ (your probability of sampling) match $f(x)$ (the brightness).
+\begin{itemize}
+    \item If a spot is bright, sample it often (high $p$).
+    \item If a spot is dark, sample it rarely (low $p$).
+\end{itemize}
+
+Recall the estimator: $\frac{f(x)}{p(x)}$.
+If $f(x)$ is large (bright light) and $p(x)$ is large (we sample there often), the ratio remains constant and stable. If we use uniform sampling (constant $p$) but $f(x)$ spikes, the result varies wildly (high noise).
+
+\subsection{Multiple Importance Sampling (MIS)}
+What if you have a shiny table (glossy material) reflecting a bright light?
+\begin{itemize}
+    \item \textbf{Strategy A}: Sample based on the Table (glossy reflection direction).
+    \item \textbf{Strategy B}: Sample based on the Light (direction to light source).
+\end{itemize}
+
+Which is better? If the table is a perfect mirror, Strategy A is better. If the light is huge, Strategy B is better.
+
+\textbf{MIS} says: \textbf{Do both.} Shoot some rays using Strategy A, some using Strategy B, and use a ``heuristic'' (weighted average) to combine them.
+\begin{equation}
+    w_1 = \frac{p_1^2}{p_1^2 + p_2^2}
+\end{equation}
+This handles ``corner cases'' automatically. It prevents ``fireflies'' (bright white noise pixels).
+
+% -------------------------------------------------------------------
+
+\section{Sampling Using the Inversion Method}
+
+Okay, we know we \textit{want} to do Importance Sampling. We want to generate random numbers that follow a specific curve (e.g., ``more samples near the center''). But \texttt{Math.random()} only gives us a flat (uniform) distribution between 0 and 1. How do we remap 0-1 to a complex shape?
+
+This section introduces three key terms:
+
+\subsection{1. The PDF (Probability Density Function)}
+Think of this as a \textbf{Histogram}. It tells you ``how likely is it to pick a value here?''
+\begin{itemize}
+    \item For a standard \texttt{Math.random()}, the PDF is flat (1.0 everywhere).
+    \item For a ``bell curve'' (Gaussian), the PDF is high in the middle and low at the ends.
+    \item \textbf{Constraint}: The area under the PDF curve must equal 1. (Total probability = 100\%).
+\end{itemize}
+
+\subsection{2. The CDF (Cumulative Distribution Function)}
+Think of this as the \textbf{Running Total} (or Prefix Sum) of the PDF. If you walk along the PDF from left to right adding up the values, you get the CDF.
+\begin{itemize}
+    \item It always starts at 0.
+    \item It always ends at 1.
+    \item It is strictly increasing.
+\end{itemize}
+
+\subsection{3. The Inversion Method (The Algorithm)}
+This is the ``Magic Trick'' to convert a uniform random number into a custom distribution.
+
+\textbf{The Steps:}
+\begin{enumerate}
+    \item \textbf{Integrate} the PDF to get the CDF.
+    \item \textbf{Invert} the CDF (Swap X and Y).
+    \item Feed your random number ($u$) into the Inverse CDF.
+\end{enumerate}
+
+\textbf{Example: Sampling a Linear Ramp}\\
+We want to pick numbers such that larger numbers are more likely (a ramp shape).
+\begin{itemize}
+    \item \textbf{PDF}: $p(x) = 2x$ (for $x$ in $0..1$).
+    \item \textbf{CDF}: Integrate $2x \rightarrow x^2$. $P(x) = x^2$.
+    \item \textbf{Inversion}: Solve $y = x^2$ for $x$. Result: $x = \sqrt{y}$.
+\end{itemize}
+
+\textbf{The Code}:
+\begin{lstlisting}
+float u = Math.random(); // Uniform 0..1
+float sample = sqrt(u);  // Distributed 0..1, but clustered near 1
+\end{lstlisting}
+If you run this code, `sample` will be biased toward 1.0, exactly matching the $2x$ ramp. You have successfully ``importance sampled'' a linear function.
+
+% -------------------------------------------------------------------
+
+\section{Transforming Between Distributions}
+
+The previous section handled 1D numbers. But in 3D rendering, we need to sample \textbf{Directions} (2D/3D vectors). If we just pick a random $X$ and random $Y$, we sample a square. How do we sample a \textbf{Disk} or a \textbf{Sphere}?
+
+\subsection{The Jacobian}
+When you stretch a rubber sheet, the image painted on it gets distorted. If you transform a coordinate system (e.g., from Cartesian $x,y$ to Polar $r,\theta$), the ``density'' of your samples changes.
+
+If you blindly sample $r$ (0..1) and $\theta$ (0..$2\pi$), your samples will clump in the center of the circle. This is because the ``bullseye'' is tiny, but the outer ring is huge. If you treat $r$ linearly, you are throwing as many darts at the tiny bullseye as you are at the huge outer ring.
+
+To fix this, we need the \textbf{Jacobian}, which measures how much the area ``stretches.'' For polar coordinates, the area element is $r \, dr \, d\theta$. The extra factor \textbf{$r$} tells us: ``We need more samples as radius increases.''
+
+\subsection{Sampling a Unit Disk}
+To sample a circle uniformly (without clumping in the center), we must account for that stretching. Using the Inversion Method on the PDF $p(r) \propto r$:
+\begin{itemize}
+    \item \textbf{CDF}: Integrate $r \rightarrow r^2$.
+    \item \textbf{Invert}: $r = \sqrt{u}$.
+\end{itemize}
+
+\textbf{Correct Code for Uniform Disk Sampling:}
+\begin{lstlisting}
+float u1 = Math.random();
+float u2 = Math.random();
+
+float r = sqrt(u1);        // Push samples outward to counteract clumping
+float theta = 2 * PI * u2; // Full rotation
+
+float x = r * cos(theta);
+float y = r * sin(theta);
+\end{lstlisting}
+If you missed the \texttt{sqrt}, your render would be too bright in the center and dark on the edges.
+
+% -------------------------------------------------------------------
+
+\section*{Summary for the Developer}
+Chapter 2 isn't asking you to solve integrals by hand. It is asking you to:
+\begin{enumerate}
+    \item \textbf{Think in Averages}: A pixel is just the average of many random rays.
+    \item \textbf{Understand Bias}: If you sample incorrectly, your image will be too bright or too dark. You must divide by the probability to correct this.
+    \item \textbf{Master the Inversion Method}: This is your toolbox for converting \texttt{rand()} into \texttt{Vector3}.
+    (PDF $\rightarrow$ CDF $\rightarrow$ Inverse $\rightarrow$ Code).
+\end{enumerate}
+
+By mastering these tools, you can replace complex calculus equations with simple \texttt{for} loops that converge to the correct physical reality.
+
+\end{document}
