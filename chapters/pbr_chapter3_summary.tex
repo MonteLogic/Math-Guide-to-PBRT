@@ -1,0 +1,247 @@
+\documentclass[11pt, a4paper]{article}
+
+% Packages for formatting, math, and code
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+
+% Page Geometry Settings
+\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+
+% Custom Colors for code and emphasis
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+% Code listing style
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+% Title Information
+\title{\textbf{The Programmer's Guide to PBRT}\\ \large Chapter 3: Geometry and Transformations}
+\author{Gemini (AI Thought Partner)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Welcome to the mathematical foundation of Physically Based Rendering (PBRT). As a programmer with a background in Pre-Calculus, you are well-equipped to handle this chapter. 
+
+\textbf{Good News:} Chapter 3 does \textit{not} require Calculus. There are no integrals or derivatives here. Instead, this chapter relies entirely on \textbf{Linear Algebra} and \textbf{Trigonometry}.
+
+In computer graphics, we do not simply "draw" shapes; we simulate light interacting with matter in a 3D environment. To do this, we need rigorous data structures to represent where things are (\textit{Points}), where they are going (\textit{Vectors}), and how they are oriented (\textit{Normals}).
+
+This document interprets the mathematical concepts of PBRT Chapter 3 through the lens of a C++ programmer, focusing on data types, valid operations, and geometric intuition.
+
+\section{Coordinate Systems}
+Before placing any object in a scene, we must define the "stage" upon which it sits. A coordinate system is defined by an origin point $(0,0,0)$ and three basis vectors representing the axes: $x, y, z$.
+
+\subsection{Handedness: Left vs. Right}
+This is the most common source of bugs in graphics programming. PBRT uses a \textbf{Left-Handed Coordinate System}.
+
+\begin{itemize}
+    \item \textbf{Right-Handed (Standard Math/OpenGL):} If $x$ points right and $y$ points up, the $z$-axis points \textit{towards} you.
+    \item \textbf{Left-Handed (PBRT/DirectX):} If $x$ points right and $y$ points up, the $z$-axis points \textit{away} from you (into the screen).
+\end{itemize}
+
+\begin{tcolorbox}[colback=red!5!white,colframe=red!75!black,title=Critical Warning]
+If you assume the wrong handedness, your cross products (which calculate perpendicular vectors) will point in the opposite direction. This effectively flips your geometry inside out or causes lighting calculations to fail because surfaces will face the wrong way.
+\end{tcolorbox}
+
+\section{The Actors: Vectors, Points, and Normals}
+In standard mathematics, the tuple $(x, y, z)$ is often generically called a "vector." In PBRT, we strictly distinguish between three types to prevent logical errors. As a programmer, think of this as \textbf{Strong Typing}.
+
+\subsection{Vectors (\texttt{Vector3f})}
+A vector represents a \textbf{direction} and a \textbf{magnitude} (length). It does \textit{not} have a position.
+
+\begin{itemize}
+    \item \textbf{Analogy:} An instruction like "Move 5 meters North." This instruction is valid whether you are in New York or Tokyo.
+    \item \textbf{Data Structure:} `float x, y, z;`
+    \item \textbf{Valid Operations:}
+    \begin{equation}
+        \mathbf{v} + \mathbf{v} = \mathbf{v} \quad (\text{Go North, then Go East} = \text{Go Northeast})
+    \end{equation}
+    \begin{equation}
+        s \cdot \mathbf{v} = \mathbf{v} \quad (\text{Scalar multiplication scales the length})
+    \end{equation}
+\end{itemize}
+
+\subsection{Points (\texttt{Point3f})}
+A point represents a specific \textbf{location} in space relative to the origin.
+
+\begin{itemize}
+    \item \textbf{Analogy:} A GPS coordinate or street address.
+    \item \textbf{Data Structure:} `float x, y, z;`
+    \item \textbf{Valid Operations:}
+    \begin{equation}
+        \text{Point} + \text{Vector} = \text{Point} \quad (\text{Start at home, walk 5 miles} \rightarrow \text{New Location})
+    \end{equation}
+    \begin{equation}
+        \text{Point} - \text{Point} = \text{Vector} \quad (\text{The difference between two locations is a distance/direction})
+    \end{equation}
+    \item \textbf{Invalid Operation:} $\text{Point} + \text{Point}$. (Adding two street addresses together creates nonsense).
+\end{itemize}
+
+\subsection{Normals (\texttt{Normal3f})}
+A Normal is a vector that is strictly \textbf{perpendicular} to a surface. It defines orientation.
+
+\begin{itemize}
+    \item \textbf{Why a separate class?} Although mathematically similar to vectors, Normals behave differently under transformations (scaling). If you flatten a sphere into a pancake, the surface vectors flatten, but the Normals must point \textit{more vertically} to remain perpendicular to the surface.
+    \item \textbf{Transformation Rule:} Normals are transformed by the \textbf{Inverse Transpose} of the transformation matrix ($M^{-T}$), whereas Vectors are transformed by $M$.
+\end{itemize}
+
+\section{The Toolset: Dot and Cross Products}
+You do not need to memorize the arithmetic implementation, but you must understand the \textit{geometric intent}.
+
+\subsection{The Dot Product}
+The dot product of two vectors $\mathbf{v}$ and $\mathbf{w}$ is a scalar value (a single number).
+\begin{equation}
+    \mathbf{v} \cdot \mathbf{w} = x_v x_w + y_v y_w + z_v z_w = \|\mathbf{v}\| \|\mathbf{w}\| \cos \theta
+\end{equation}
+\textbf{Programmer's Intuition:} This acts as a "Similarity Check."
+\begin{itemize}
+    \item \textbf{1.0:} Vectors are perfectly aligned (normalized).
+    \item \textbf{0.0:} Vectors are perpendicular (orthogonal).
+    \item \textbf{-1.0:} Vectors point in opposite directions.
+\end{itemize}
+\textbf{Usage in PBRT:} Calculating lighting. If a light ray hits a surface, the intensity is determined by the angle between the light direction and the surface Normal (Lambert's Cosine Law).
+
+\subsection{The Cross Product}
+The cross product of two vectors $\mathbf{v}$ and $\mathbf{w}$ returns a new \textbf{Vector} that is perpendicular to both inputs.
+\begin{equation}
+    \mathbf{v} \times \mathbf{w} = \begin{pmatrix} y_v z_w - z_v y_w \\ z_v x_w - x_v z_w \\ x_v y_w - y_v x_w \end{pmatrix}
+\end{equation}
+\textbf{Usage in PBRT:} Constructing coordinate systems. If you have two edges of a triangle, the cross product gives you the surface Normal.
+\textit{Note: Order matters! $\mathbf{v} \times \mathbf{w} = -(\mathbf{w} \times \mathbf{v})$.}
+
+\section{Rays (\texttt{Ray})}
+In ray tracing, the Ray is the fundamental probe we shoot into the scene. It is a semi-infinite line defined by an origin and a direction.
+
+\subsection{The Ray Equation}
+\begin{equation}
+    \mathbf{r}(t) = \mathbf{o} + t\mathbf{d}
+\end{equation}
+Where:
+\begin{itemize}
+    \item $\mathbf{o}$: The \textbf{Origin} (Point).
+    \item $\mathbf{d}$: The \textbf{Direction} (Vector).
+    \item $t$: The \textbf{Parameter} (Scalar distance).
+\end{itemize}
+
+\subsection{Implementation Detail: \texttt{tMax}}
+The PBRT `Ray` class contains a mutable member `tMax`. 
+\begin{itemize}
+    \item Initially, `tMax` is set to Infinity.
+    \item When the ray intersects an object at distance $t_{hit}$, if $t_{hit} < tMax$, we record the hit and update `tMax = t_{hit}`.
+    \item This ensures that subsequent intersection checks ignore objects behind the closest wall we've found so far.
+\end{itemize}
+
+\section{Bounding Boxes (\texttt{Bounds3f})}
+Checking for intersection against millions of triangles is computationally expensive. To optimize this, we wrap complex objects in Axis-Aligned Bounding Boxes (AABBs).
+
+\begin{itemize}
+    \item \textbf{Definition:} Defined by two points: $p_{min}$ (minimum x,y,z) and $p_{max}$ (maximum x,y,z).
+    \item \textbf{Union:} The union of two boxes is a new box that encompasses both.
+    \item \textbf{Intersection:} We check if a Ray passes through the box using the "Slab Method." If the ray misses the box, we skip all geometry inside it.
+\end{itemize}
+
+\section{Transformations}
+This is the core mathematical complexity of Chapter 3. We use matrices to move (translate), rotate, and scale objects.
+
+\subsection{Homogeneous Coordinates}
+A 3x3 matrix can rotate and scale, but it cannot translate (move) the origin. To solve this, we increase our dimension to 4D. This is called \textbf{Homogeneous Coordinates}.
+
+We add a 4th component, $w$:
+\begin{itemize}
+    \item \textbf{Point:} $(x, y, z, 1)$. The $1$ indicates this is a location that can be translated.
+    \item \textbf{Vector:} $(x, y, z, 0)$. The $0$ indicates this is a direction. Adding a translation value to a direction is meaningless (Moving "North" 5 meters to the right is still "North").
+\end{itemize}
+
+\subsection{The Transformation Matrix}
+PBRT uses $4 \times 4$ matrices.
+\begin{equation}
+    M = \begin{pmatrix} 
+    m_{00} & m_{01} & m_{02} & t_x \\
+    m_{10} & m_{11} & m_{12} & t_y \\
+    m_{20} & m_{21} & m_{22} & t_z \\
+    0 & 0 & 0 & 1 
+    \end{pmatrix}
+\end{equation}
+When we multiply a point by this matrix, the $t_x, t_y, t_z$ column is added to the point's position. When we multiply a vector (where $w=0$), that column is multiplied by 0 and ignored.
+
+\subsection{The \texttt{Transform} Class}
+In C++, the `Transform` class maintains two matrices:
+\begin{lstlisting}[language=C++]
+class Transform {
+  private:
+    Matrix4x4 m, mInv;
+  // ...
+};
+\end{lstlisting}
+We store the inverse matrix (`mInv`) because we frequently need to transform rays from World Space back into Object Space to perform intersections efficiently.
+
+\section{Spherical Geometry}
+Lights and cameras operate using angles rather than Cartesian coordinates.
+
+\subsection{Solid Angle}
+In 2D, we measure an angle in radians (length of arc on a unit circle). In 3D, we measure a \textbf{Solid Angle} ($d\omega$) in \textbf{Steradians}. It represents the area of a patch on a unit sphere.
+
+\begin{equation}
+    d\omega = \sin \theta \, d\theta \, d\phi
+\end{equation}
+This formula accounts for the fact that latitude bands on a sphere get smaller as you get closer to the poles (the singularities).
+
+\section{Interactions (\texttt{Interaction})}
+PBRT consolidates all geometric data generated by a ray hitting a surface into a struct called `Interaction`.
+
+When a ray hits a primitive, it populates this struct with:
+\begin{itemize}
+    \item $\mathbf{p}$: The Point of intersection.
+    \item $\mathbf{n}$: The geometric Normal at that point.
+    \item $\mathbf{w_o}$: The outgoing direction (vector towards the camera).
+    \item $(u, v)$: Texture coordinates.
+\end{itemize}
+This `Interaction` object is passed to shading functions to calculate color/material appearance.
+
+\section{Summary for the Programmer}
+You have now surveyed the "Linear Algebra Toolkit" required for ray tracing.
+
+\begin{enumerate}
+    \item \textbf{Type Safety:} Never mix Points and Vectors indiscriminately.
+    \item \textbf{Coordinate Systems:} Always remember PBRT is Left-Handed ($+Z$ is forward).
+    \item \textbf{Normals:} Require special handling ($M^{-T}$) during transformation.
+    \item \textbf{Homogeneous Coordinates:} The "magic" $w$ component handles the distinction between translation-sensitive Points and translation-invariant Vectors.
+\end{enumerate}
+
+With these structures defined, Chapter 4 will move on to Radiometry (the physics of light measurement).
+
+\end{document}
